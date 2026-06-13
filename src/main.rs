@@ -70,9 +70,15 @@ async fn main() -> std::io::Result<()> {
 
     // Instantiate and bind Actix-web server
     HttpServer::new(move || {
+        // Raise JSON body limit to 256 MB — campaign payloads for 200k+ recipients
+        // can easily exceed the 2 MB default when sent as a single batch.
+        let json_cfg = web::JsonConfig::default()
+            .limit(256 * 1024 * 1024);
+
         App::new()
             .wrap(Logger::default())
             .app_data(app_state.clone())
+            .app_data(json_cfg)
             .service(routes::health::health_check)
             .service(routes::send::send_campaign)
     })
