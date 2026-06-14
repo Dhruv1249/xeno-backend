@@ -29,7 +29,7 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          IMAGE="asia-south2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/xeno-backend/xeno-backend:latest"
+          IMAGE="asia-south2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/xeno-backend:latest"
           docker build -t $IMAGE .
           docker push $IMAGE
 
