@@ -36,8 +36,7 @@ jobs:
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: .
           push: true
           tags: asia-south2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/xeno-backend/xeno-backend:latest
           cache-from: type=gha
