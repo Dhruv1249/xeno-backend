@@ -59,27 +59,62 @@ pub fn start_simulation(
     // Each task must acquire a permit before making any HTTP callback.
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CALLBACKS));
 
-    for comm in request.communications {
-        let client_clone = client.clone();
-        let callback_url_clone = callback_url.clone();
-        let config_clone = config.clone();
-        let sem_clone = Arc::clone(&semaphore);
+    tokio::spawn(async move {
+        let mut join_handles = vec![];
 
-        tokio::spawn(async move {
-            if let Err(e) = simulate_communication(
-                &client_clone,
-                campaign_id,
-                comm,
-                &callback_url_clone,
-                config_clone,
-                sem_clone,
-            )
-            .await
-            {
-                log::error!("Simulation task failed: {}", e);
-            }
-        });
-    }
+        for comm in request.communications {
+            let client_clone = client.clone();
+            let callback_url_clone = callback_url.clone();
+            let config_clone = config.clone();
+            let sem_clone = Arc::clone(&semaphore);
+
+            let handle = tokio::spawn(async move {
+                if let Err(e) = simulate_communication(
+                    &client_clone,
+                    campaign_id,
+                    comm,
+                    &callback_url_clone,
+                    config_clone,
+                    sem_clone,
+                )
+                .await
+                {
+                    log::error!("Simulation task failed: {}", e);
+                }
+            });
+            join_handles.push(handle);
+        }
+
+        // Wait for all individual communication simulations to complete
+        for handle in join_handles {
+            let _ = handle.await;
+        }
+
+        log::info!("All simulations completed for campaign: {}", campaign_id);
+
+        // Sleep briefly (e.g. 500ms) to ensure previous callbacks are processed and committed
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        if let Err(e) = send_campaign_completed_callback(&client, &callback_url, campaign_id).await {
+            log::error!("Failed to send campaign completion callback: {}", e);
+        }
+    });
+}
+
+/// Sends a campaign completion notification callback back to Next.js.
+async fn send_campaign_completed_callback(
+    client: &reqwest::Client,
+    callback_url: &str,
+    campaign_id: Uuid,
+) -> Result<(), crate::errors::AppError> {
+    let payload = CallbackPayload {
+        communication_id: Uuid::nil(),
+        campaign_id,
+        event_type: "completed".to_string(),
+        occurred_at: Utc::now().to_rfc3339(),
+        metadata: serde_json::json!({}),
+    };
+    send_callback(client, callback_url, payload).await
 }
 
 /// Simulates the lifecycle of a single customer message.
